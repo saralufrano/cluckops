@@ -10,15 +10,6 @@ function timingSafeHexEqual(left, right) {
   }
 }
 
-function signatureCandidates(req) {
-  return [
-    req.headers['x-ring-signature'],
-    req.headers['x-ring-signature-256'],
-    req.headers['x-signature'],
-    req.headers['x-hub-signature-256']
-  ].filter(Boolean).map(String);
-}
-
 export const config = {
   api: { bodyParser: false }
 };
@@ -36,11 +27,10 @@ export default async function handler(req, res) {
   for await (const chunk of req) chunks.push(chunk);
   const rawBody = Buffer.concat(chunks);
 
+  const received = String(req.headers['x-signature'] || '').replace(/^sha256=/i, '');
   const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
-  const signatures = signatureCandidates(req).map(value => value.replace(/^sha256=/i, ''));
-  const verified = signatures.some(value => timingSafeHexEqual(value, expected));
 
-  if (!verified) {
+  if (!received || !timingSafeHexEqual(received, expected)) {
     console.warn('Rejected Ring webhook: signature verification failed');
     return res.status(401).json({ error: 'Invalid signature' });
   }
@@ -53,11 +43,13 @@ export default async function handler(req, res) {
   }
 
   // First live increment: prove a signed Ring event reached CluckOps.
-  // Durable event persistence is intentionally the next slice.
+  // Durable request_id dedupe and event persistence are the next slice.
   console.log('Verified Ring webhook', {
-    requestId: event.request_id ?? event.requestId ?? null,
-    eventType: event.event_type ?? event.type ?? 'unknown',
-    deviceId: event.device_id ?? event.deviceId ?? null
+    requestId: event.meta?.request_id ?? null,
+    accountId: event.meta?.account_id ?? null,
+    eventType: event.data?.type ?? 'unknown',
+    deviceId: event.data?.attributes?.source ?? null,
+    timestamp: event.data?.attributes?.timestamp ?? null
   });
 
   return res.status(200).json({ received: true });
