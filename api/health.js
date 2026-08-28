@@ -10,7 +10,8 @@ export default function handler(req, res) {
     clientIdConfigured: Boolean(process.env.RING_CLIENT_ID),
     clientSecretConfigured: Boolean(process.env.RING_CLIENT_SECRET),
     hmacConfigured: Boolean(process.env.RING_HMAC_SECRET),
-    durableStorageConfigured: isRedisConfigured()
+    durableStorageConfigured: isRedisConfigured(),
+    tokenEncryptionConfigured: Boolean(process.env.RING_TOKEN_ENCRYPTION_KEY)
   };
 
   const readyForRing = Object.values(ring).every(Boolean);
